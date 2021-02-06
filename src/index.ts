@@ -1,17 +1,17 @@
-import dotenv from "dotenv";
-dotenv.config();
-import "reflect-metadata";
-import mongoose, { ConnectionOptions } from "mongoose";
-import express from "express";
 import { ApolloServer } from "apollo-server-express";
-import { UserResolver } from "./graphql";
-import { buildSchema } from "type-graphql";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import dotenv from "dotenv";
+import express from "express";
+import mongoose, { ConnectionOptions } from "mongoose";
+import "reflect-metadata";
+import { buildSchema } from "type-graphql";
+import { UserResolver } from "./graphql";
 import { refresh } from "./util";
+dotenv.config();
 
 // PORT
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 5000;
 
 // Mongoose Connection Options
 const mongooseConnectionOptions: ConnectionOptions = {
@@ -26,6 +26,8 @@ const mongooseConnectionOptions: ConnectionOptions = {
 	// Express Middleware
 	app.use(cors({ credentials: true, origin: "http://localhost:3000" }));
 	app.use(cookieParser());
+	// Trust proxy for production
+	app.set("trust proxy", 1);
 	// Express Routes
 	app.post("/refresh", refresh);
 	// Creating MongoDB Connection

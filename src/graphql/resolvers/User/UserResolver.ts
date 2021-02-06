@@ -1,7 +1,7 @@
 import { DocumentType, mongoose } from "@typegoose/typegoose";
-import { hash, compare } from "bcryptjs";
-import { Error } from "mongoose";
+import { compare, hash } from "bcryptjs";
 import { verify } from "jsonwebtoken";
+import { Error } from "mongoose";
 import {
 	Arg,
 	Ctx,
@@ -13,13 +13,13 @@ import {
 	UseMiddleware,
 } from "type-graphql";
 import { User, UserModel } from "../../../models";
-import { Context } from "../../context";
 import {
 	createAccessToken,
 	createRefreshToken,
 	isAuthorized,
 	sendRefreshToken,
 } from "../../../util";
+import { Context } from "../../context";
 
 @ObjectType()
 class LoginResponse {
@@ -47,10 +47,8 @@ export class UserResolver {
 	async me(@Ctx() context: Context): Promise<DocumentType<User> | null> {
 		const { req } = context;
 		const authorization = req.headers["authorization"];
-		console.log(authorization);
 		if (!authorization) return null;
 		const token = authorization.split(" ")[1];
-		console.log("me");
 
 		let payload: any;
 		try {

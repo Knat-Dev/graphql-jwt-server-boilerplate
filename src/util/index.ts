@@ -12,7 +12,6 @@ export const isAuthorized: MiddlewareFn<Context> = (
 ) => {
 	const { req } = context;
 	const authorization = req.headers["authorization"];
-	console.log(authorization);
 	if (!authorization) throw new Error("Not authenticated");
 	const token = authorization.split(" ")[1];
 	try {
@@ -44,7 +43,9 @@ export const createRefreshToken = (user: User): string => {
 export const sendRefreshToken = (res: Response, token: string): void => {
 	res.cookie("nwid", token, {
 		httpOnly: true,
-		path: "/refresh",
-		secure: process.env.NODE_ENV === "prod",
+		sameSite: "lax",
+		domain:
+			process.env.NODE_ENV === "production" ? ".yourdomain.com" : "localhost",
+		secure: process.env.NODE_ENV === "production",
 	});
 };
