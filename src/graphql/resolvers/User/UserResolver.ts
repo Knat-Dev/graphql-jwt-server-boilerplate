@@ -1,7 +1,7 @@
+/* eslint-disable no-control-regex */
 import { DocumentType, mongoose } from "@typegoose/typegoose";
 import { compare, hash } from "bcryptjs";
 import { verify } from "jsonwebtoken";
-import { Error } from "mongoose";
 import {
 	Arg,
 	Ctx,
@@ -20,16 +20,30 @@ import {
 	sendRefreshToken,
 } from "../../../util";
 import { Context } from "../../context";
+import { FieldError } from "../../types";
 
 @ObjectType()
 class LoginResponse {
-	@Field()
-	accessToken: string;
+	@Field({ nullable: true })
+	accessToken?: string;
 
-	@Field()
-	user: User;
+	@Field(() => User, { nullable: true })
+	user?: User;
+
+	@Field(() => [FieldError], { nullable: true })
+	errors?: FieldError[];
 }
 
+@ObjectType()
+class RegisterResponse {
+	@Field({ nullable: true })
+	ok?: boolean;
+
+	@Field(() => [FieldError], { nullable: true })
+	errors?: FieldError[];
+}
+
+const emailRegex = /(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9]))\.){3}(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9])|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])/;
 @Resolver(() => User)
 export class UserResolver {
 	@Query(() => String)
@@ -63,24 +77,77 @@ export class UserResolver {
 		);
 	}
 
-	@Mutation(() => Boolean)
+	@Mutation(() => RegisterResponse)
 	async register(
 		@Arg("email") email: string,
+		@Arg("username") username: string,
 		@Arg("password") password: string
-	): Promise<boolean> {
-		const user = await UserModel.findOne({ email });
-		if (user) throw new Error("Email address already exists");
+	): Promise<RegisterResponse> {
+		const errors: FieldError[] = [];
+		const trimmedEmail = email.trim();
+		const trimmedUsername = username.trim();
+		const trimmedUsernameLowerCase = trimmedUsername.toLocaleLowerCase();
+
+		if (!trimmedEmail)
+			errors.push({
+				field: "email",
+				message: "Email is required",
+			});
+		else if (!emailRegex.test(trimmedEmail))
+			errors.push({
+				field: "email",
+				message: "Email is Invalid",
+			});
+
+		if (!trimmedUsername)
+			errors.push({
+				field: "username",
+				message: "Username is required",
+			});
+		else if (trimmedUsername.length < 3)
+			errors.push({
+				field: "username",
+				message: "Username length must be greater 3",
+			});
+
+		if (!password.trim())
+			errors.push({
+				field: "password",
+				message: "Password is required",
+			});
+
+		if (errors.length > 0) return { errors };
+
+		const user = await UserModel.findOne({
+			$or: [{ email: trimmedEmail }, { _username: trimmedUsernameLowerCase }],
+		});
+
+		if (user) {
+			if (user.email === trimmedEmail)
+				errors.push({
+					field: "email",
+					message: "Email is already is linked to an account",
+				});
+			else
+				errors.push({
+					field: "username",
+					message: "Username is already is linked to an account",
+				});
+			return { errors };
+		}
 		try {
 			const hashedPassword = await hash(password, 10);
 			await UserModel.create({
-				email,
+				email: trimmedEmail,
+				username: trimmedUsername,
+				_username: trimmedUsernameLowerCase,
 				password: hashedPassword,
 			});
 
-			return true;
+			return { ok: true };
 		} catch (e) {
 			console.error(e);
-			return false;
+			return { ok: false };
 		}
 	}
 
@@ -90,11 +157,38 @@ export class UserResolver {
 		@Arg("password") password: string,
 		@Ctx() { res }: Context
 	): Promise<LoginResponse> {
-		const user = await UserModel.findOne({ email });
-		if (!user) throw new Error("Could not find user with given Email address");
+		const errors: FieldError[] = [];
+		const trimmedEmail = email.trim();
+
+		if (!trimmedEmail)
+			errors.push({ field: "email", message: "Email is required" });
+
+		if (errors.length > 0) return { errors };
+
+		const user = await UserModel.findOne({
+			$or: [{ email }, { _username: email.toLocaleLowerCase() }],
+		});
+
+		if (!user)
+			errors.push({
+				field: "email",
+				message: "Email/Username could not be found",
+			});
+
+		if (!user || errors.length > 0)
+			return {
+				errors,
+			};
+
 		const valid = await compare(password, user.password);
 
-		if (!valid) throw new Error("Bad password");
+		if (!valid) {
+			errors.push({
+				field: "password",
+				message: "Password is wrong",
+			});
+			return { errors };
+		}
 
 		sendRefreshToken(res, createRefreshToken(user));
 		return {

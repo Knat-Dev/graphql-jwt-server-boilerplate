@@ -8,6 +8,14 @@ export class User {
 
 	@Field()
 	@prop({ required: true })
+	public username!: string;
+
+	@Field()
+	@prop({ required: true })
+	public _username!: string;
+
+	@Field()
+	@prop({ required: true })
 	public email!: string;
 
 	@prop({ required: true })
