@@ -3,10 +3,14 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import { Server } from "http";
+import { verify } from "jsonwebtoken";
 import mongoose, { ConnectionOptions } from "mongoose";
 import "reflect-metadata";
+import { Server as SocketServer } from "socket.io";
 import { buildSchema } from "type-graphql";
 import { UserResolver } from "./graphql";
+import { Socket } from "./types";
 import { refresh } from "./util";
 dotenv.config();
 
@@ -48,7 +52,41 @@ const mongooseConnectionOptions: ConnectionOptions = {
 	});
 	apollo.applyMiddleware({ app, path: "/api", cors: false });
 	// Starting up Express Server
-	app.listen(port, () => {
+
+	const http = new Server(app);
+	const io = new SocketServer(http, {
+		cors: {
+			origin: "http://localhost:3000",
+		},
+	});
+
+	io.use((socket: Socket, next) => {
+		const { token } = socket.handshake.query;
+		if (token && typeof token === "string") {
+			try {
+				const payload = verify(token, `${process.env.JWT_ACCESS_TOKEN_SECRET}`) as {
+					userId: string;
+				};
+				socket.userId = payload.userId;
+				return next();
+			} catch (e) {
+				console.log(e);
+			}
+		} else {
+			console.log("hey");
+		}
+	});
+
+	io.sockets.on("connection", (socket: Socket) => {
+		console.log("Connected: " + socket.userId);
+		socket.emit("welcome", "Welcome to the server..");
+
+		socket.on("disconnect", () => {
+			console.log("Disconnected: " + socket.userId);
+		});
+	});
+
+	http.listen(port, () => {
 		console.log(`GraphQL playground running at http://localhost:${port}/api`);
 	});
 })();

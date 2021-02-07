@@ -166,7 +166,10 @@ export class UserResolver {
 		if (errors.length > 0) return { errors };
 
 		const user = await UserModel.findOne({
-			$or: [{ email }, { _username: email.toLocaleLowerCase() }],
+			$or: [
+				{ email: trimmedEmail },
+				{ _username: trimmedEmail.toLocaleLowerCase() },
+			],
 		});
 
 		if (!user)
