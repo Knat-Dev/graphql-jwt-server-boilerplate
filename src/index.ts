@@ -77,13 +77,23 @@ const mongooseConnectionOptions: ConnectionOptions = {
 		}
 	});
 
-	io.sockets.on("connection", (socket: Socket) => {
-		console.log("Connected: " + socket.userId);
-		socket.emit("welcome", "Welcome to the server..");
+	const users: string[] = [];
 
-		socket.on("disconnect", () => {
-			console.log("Disconnected: " + socket.userId);
-		});
+	io.on("connection", (socket: Socket) => {
+		if (socket.userId) {
+			users.push(socket.userId);
+			console.log("A user connected: " + JSON.stringify(users, undefined, 2));
+			// console.log("Connected: " + socket.userId);
+			socket.emit("welcome", "Welcome to the server..");
+			socket.on("refresh_page", () =>
+				console.log("Page Refreshed: " + socket.userId)
+			);
+			socket.on("disconnect", () => {
+				const idx = users.findIndex((user) => user === socket.userId);
+				users.splice(idx, 1);
+				console.log("A user disconnected: " + JSON.stringify(users, undefined, 2));
+			});
+		}
 	});
 
 	http.listen(port, () => {
